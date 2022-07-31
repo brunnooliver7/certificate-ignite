@@ -1,5 +1,9 @@
 import { APIGatewayProxyHandler } from "aws-lambda"
 import { document } from "../utils/dynamodbClient";
+import { join } from 'path';
+import { readFileSync } from 'fs';
+import * as handlebars from 'handlebars';
+import * as dayjs from 'dayjs';
 
 interface ICreateCertificate {
   id: string;
@@ -7,12 +11,27 @@ interface ICreateCertificate {
   grade: string;
 }
 
+interface ITemplate {
+  id: string;
+  name: string;
+  grade: string;
+  medal: string;
+  date: string;
+}
+
+const compile = async (data: ITemplate) => {
+  const filePath = join(process.cwd(), " src", "templates", " certificate.hbs");
+  const html = readFileSync(filePath, "utf8");
+
+  return handlebars.compile(html)(data);
+}
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   const { id, name, grade } = JSON.parse(event.body) as ICreateCertificate;
 
   await document.put({
     TableName: "users_certificate",
-    Item: { 
+    Item: {
       id,
       name,
       grade,
@@ -27,6 +46,19 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       ":id": id
     }
   }).promise();
+
+  const medalPath = join(process.cwd(), "src", "templates", "selo.png");
+  const medal = readFileSync(medalPath, "base64");
+
+  const data: ITemplate = {
+    id,
+    name,
+    grade,
+    date: dayjs().format("DD/MM/YYYY"),
+    medal
+  }
+
+  const content = await compile(data);
 
   return {
     statusCode: 201,
